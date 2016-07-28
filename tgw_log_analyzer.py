@@ -146,11 +146,12 @@ class ParserBase(object):
         """
         raise exceptions.NotImplemented
 
-    def on_startup(self):
+    def on_startup(self, **kwargs):
         """在发现网关重启时被调用。
 
         可用于清理上一次启动留下的未结束的状态。
 
+        :
         :returns: 无
         """
         pass
@@ -323,13 +324,13 @@ class ConnectionParser(ParserBase):
             logging.debug(u'    {datetime}: Gateway "{gw_id}" (#{conn_id}) disconnected from {cs_addr}: {wanm_errno}, {wanm_errmsg}'.format(**m.groupdict()))
             return True
         
-        return True
+        return False
 
     def finish(self):
         self.on_startup()
         return self.connections
 
-    def on_startup(self):
+    def on_startup(self, **kwargs):
         # 每次网关重启，都把之前的连接信息移到connections中
         for gw_id in self.active_conns.keys():
             for conn_id in sorted(self.active_conns[gw_id].keys()):
@@ -337,6 +338,40 @@ class ConnectionParser(ParserBase):
 
         self.active_conns.clear()
 
+
+class StartupParser(ParserBase):
+    """分析网关关闭时间、原因
+    """
+    re_shutdown_win = re.compile(
+        RE_DATETIME + r'.*@cppf::common::StopAppFunc@.*@Catch control event (?P<reason>\w+).*, stopping@.*')
+
+    def __init__(self, parser_name='startups'):
+        super(StartupParser, self).__init__(parser_name)
+        self.startups = list()
+        self.last_startup_time = ''
+    
+    def parse(self, line):
+        m = self.re_shutdown_win.match(line)
+        if m:
+            self.startups.append({
+                'startup_time': self.last_startup_time,
+                'shutdown_time' : m.group('datetime'),
+                'shutdown_reason' : m.group('reason'),
+            })
+            self.last_startup_time = ''
+            return True
+        
+    def on_startup(self, **kwargs):
+        self.last_startup_time = kwargs['datetime']
+
+    def finish(self):
+        if self.last_startup_time:  # 最后一次启动没有关闭
+            self.startups.append({
+                'startup_time': self.last_startup_time,
+                'shutdown_time' : '',
+                'shutdown_reason' : '',
+            })
+        return self.startups
 
 class TgwLogParser(object):
 
@@ -354,19 +389,19 @@ class TgwLogParser(object):
         self.filename = filename
         self.parsers = (
             StatusParser(),
+            ConnectionParser('connections'),
             RegexParser(
                 'version',
                 r'.*app started, Version Info: .* (?P<variant>RELEASE|DEBUG) version:(?P<version>.*?) revision:(?P<revision>\d+).*'),
             RegexParser(
                 'os',
                 r'.*osType:(?P<type>.*), osVersion:(?P<version>.*), cpuType:(?P<cpu>.*), cpuBits:(?P<bits>.*), memorySize:(?P<memory>\w+).*'),
-            ConnectionParser('connections'),
+            StartupParser(),
         )
         self.first_time = ''
         self.last_time = ''
         self.line_count = 0
         self.re_datetime = re.compile(RE_DATETIME)
-        self.startups = list()
 
     def parse(self):
         """解释一个日志文件
@@ -390,10 +425,9 @@ class TgwLogParser(object):
                 m = self.re_startup.match(line)
                 if m:   # 检测到网关重启
                     logging.debug(u'  Gateway startup at {datetime}'.format(**m.groupdict()))
-                    self.startups.append(m.groupdict())
 
                     for parser in self.parsers:
-                        parser.on_startup()
+                        parser.on_startup(**m.groupdict())
 
                     continue
 
@@ -417,7 +451,6 @@ class TgwLogParser(object):
             'last_time'  : self.last_time,
             'line_count' : self.line_count,
         }
-        result['startups'] = self.startups
 
         for parser in self.parsers:
             result[parser.parser_name] = parser.finish()

@@ -95,17 +95,21 @@
         </tr>
     </table>
 
-    % if version.details:
+    % if len(startups) > 0:
     <h2>网关启动时间</h2>
     <table>
         <tr>
-            <th>启动次数</th>
+            <th>编号</th>
             <th>启动时间</th>
+            <th>停止时间</th>
+            <th>停止原因</th>
         </tr>
         % for i in xrange(len(startups)):
         <tr>
             <td>${i + 1}</td>
-            <td>${startups[i]['datetime']}</td>
+            <td>${startups[i]['startup_time'][-15:]}</td>
+            <td>${startups[i]['shutdown_time'][-15:]}</td>
+            <td>${startups[i]['shutdown_reason']}</td>
         </tr>
         % endfor
     </table>

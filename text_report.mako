@@ -16,13 +16,14 @@ Memory: ${os.details[0]['memory']}
 % endif
 
 Status logs:
-${status.summary}
 count: ${status.summary['count']}  mean: ${status.summary['mean']/1000 | filters.precision(0)}ms  std: ${status.summary['std']/1000 | filters.precision(0)}ms  min: ${status.summary['min']/1000 | filters.precision(0)}ms  max: ${status.summary['max']/1000 | filters.precision(0)}ms  p90: ${status.summary['p90']/1000 | filters.precision(0)}ms
 
-% if version.details:
-Gateway startup at:
+% if len(startups) > 0:
+Gateway startups:
+${u'{:3} {:15s} {:15s} {:}'.format('IDX', 'Startup', 'Shutdown', 'Reason')}
     % for i in xrange(len(startups)):
-${u'{:3d} {:s}'.format(i + 1, startups[i]['datetime'])}
+${u'{:3d} {:15s} {:15s} {:}'.format(
+i+1, startups[i]['startup_time'][-15:], startups[i]['shutdown_time'][-15:], startups[i]['shutdown_reason'])}
     % endfor
 % endif
 
