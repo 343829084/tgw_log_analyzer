@@ -16,7 +16,8 @@ Memory: ${os.details[0]['memory']}
 % endif
 
 Status logs:
-count: ${status.summary['count']}  mean: ${status.summary['mean']/1000  |  filters.precision(0)}us  std: ${status.summary['std']/1000    |  filters.precision(0)}us  min: ${status.summary['min']/1000    |  filters.precision(0)}us  max: ${status.summary['max']/1000    |  filters.precision(0)}us  p90: ${status.summary['p90']/1000    |  filters.precision(0)}us
+${status.summary}
+count: ${status.summary['count']}  mean: ${status.summary['mean']/1000 | filters.precision(0)}ms  std: ${status.summary['std']/1000 | filters.precision(0)}ms  min: ${status.summary['min']/1000 | filters.precision(0)}ms  max: ${status.summary['max']/1000 | filters.precision(0)}ms  p90: ${status.summary['p90']/1000 | filters.precision(0)}ms
 
 % if version.details:
 Gateway startup at:
@@ -28,7 +29,7 @@ ${u'{:3d} {:s}'.format(i + 1, startups[i]['datetime'])}
 Connections:
 % for gw_id in sorted(connections.keys()): 
     % for idx in xrange(len(connections[gw_id])):
-<% conn = connections[gw_id][idx] %>${u'{idx:3d} #{conn_id:<3s} {status:9s} {begin_time:15s} {connect_time:15s} {close_time:15s} {cs_addr:21s} {wanm_errno:5s} {wanm_errmsg}'.format(
+<% conn = connections[gw_id][idx] %>${u'{idx:3d} #{conn_id:<5s} {status:9s} {begin_time:15s} {connect_time:15s} {close_time:15s} {cs_addr:21s} {wanm_errno:5s} {wanm_errmsg}'.format(
     idx=idx+1,                           conn_id=conn['conn_id'],                 status=conn['status'],
     begin_time=conn['begin_time'][-15:], connect_time=conn['connect_time'][-15:], close_time=conn['close_time'][-15:],
     cs_addr=conn['cs_addr'],             wanm_errno=conn['wanm_errno'],           wanm_errmsg=conn['wanm_errmsg'])}

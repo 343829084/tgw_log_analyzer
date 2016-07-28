@@ -76,7 +76,7 @@
     <table class='center'>
         <tr>
             <th rowspan="2">状态日志数</th>
-            <th colspan="5">耗时（微秒）</th>
+            <th colspan="5">耗时（毫秒）</th>
         </tr>
         <tr>
             <th>平均耗时</th>
