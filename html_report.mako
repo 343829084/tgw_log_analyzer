@@ -48,29 +48,27 @@
         % if version.details:
         <tr>
             <th>网关版本</th>
-            <td>${version.details[0]['version']}，SVN REVISION：${version.details[0]['revision']}</td>
+            <td>${version.details[0]['version']}，svn revision：${version.details[0]['revision']}</td>
         </tr>
         % endif
     </table>
 
     % if os.details:
-        <h2>系统信息</h2>
-        <table>
-            % if os.details:
-            <tr>
-                <th>操作系统</th>
-                <td>${os.details[0]['type']}，${os.details[0]['version']}</td>
-            </tr>
-            <tr>
-                <th>CPU</th>
-                <td>${os.details[0]['cpu']}（${os.details[0]['bits']}）</td>
-            </tr>
-            <tr>
-                <th>内存</th>
-                <td>${os.details[0]['memory']}</td>
-            </tr>
-            % endif
-        </table>
+    <h2>系统信息</h2>
+    <table>
+        <tr>
+            <th>操作系统</th>
+            <td>${os.details[0]['type']}，${os.details[0]['version']}</td>
+        </tr>
+        <tr>
+            <th>CPU</th>
+            <td>${os.details[0]['cpu']}（${os.details[0]['bits']}）</td>
+        </tr>
+        <tr>
+            <th>内存</th>
+            <td>${os.details[0]['memory']}</td>
+        </tr>
+    </table>
     % endif
 
     <h2>网关状态日志耗时分析</h2>
@@ -117,9 +115,7 @@
     % for gw_id in sorted(connections.keys()):
         <h3>网关 ${gw_id}</h3>
         <table>
-            <%
-                conns = connections[gw_id]
-            %>
+            <% conns = connections[gw_id] %>
             <tr>
                 <th>序号</th>
                 <th>WanM ID</th>

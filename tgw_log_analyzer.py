@@ -22,12 +22,16 @@ from mako.lookup import TemplateLookup
 VERSION=u"20160608"
 
 # 存放结果的目录
-OUTPUT_DIR = 'result'
-REPORT_FILENAME = 'index.html'
+DEFAULT_OUTPUT_DIR = 'result'
 
-# 报告模板目录
-TEMPLATE_DIR = '.'
-TEMPLATE_FILENAME = 'report_template.mako'
+# HTML报告模板目录
+HTML_TEMPLATE_DIR = '.'
+HTML_TEMPLATE_FILENAME = 'html_report.mako'
+HTML_REPORT_FILENAME = 'index.html'
+
+# TEXT报告模板目录
+TEXT_TEMPLATE_DIR = '.'
+TEXT_TEMPLATE_FILENAME = 'text_report.mako'
 
 RE_DATETIME = r'^\](?P<datetime>\d{4}-[^@]+)'
 
@@ -402,19 +406,10 @@ class TgwLogParser(object):
                 if m:
                     self.last_time = m.group('datetime')
 
-    def report(self, output_dir):
-        """生成报表
         
-        :output_dir: 存放报告的目录
-        :returns: 无
+        return self.get_result()
 
-        """
-        logging.info(u'Generating report in "{0}" ...'.format(output_dir))
-
-        if not os.path.exists(output_dir):
-            logging.info(u'    Creating directory "{0}"...'.format(output_dir))
-            mkpath(output_dir)
-
+    def get_result(self):
         result = {}
         result['summary'] = {
             'filename'   : self.filename,
@@ -427,19 +422,71 @@ class TgwLogParser(object):
         for parser in self.parsers:
             result[parser.parser_name] = parser.finish()
 
+        logging.info(u'  Done')
+
+        return result
+
+
+class HtmlReport(object):
+    def __init__(self, output_dir):
+        """构造函数
+        
+        :output_dir: 存放报告的目录
+        :returns: 无
+
+        """
+        self.output_dir = output_dir
+
+    def generate(self, result):
+        """生成报表
+        
+        :result: 分析结果
+        :returns: 无
+
+        """
+        logging.info(u'Generating html report in "{0}" ...'.format(self.output_dir))
+
+        if not os.path.exists(self.output_dir):
+            logging.info(u'  Creating directory "{0}"...'.format(self.output_dir))
+            mkpath(self.output_dir)
+
         mylookup = TemplateLookup(
-            directories=[TEMPLATE_DIR],
+            directories=[HTML_TEMPLATE_DIR],
             input_encoding='utf-8',
             output_encoding='utf-8',
             encoding_errors='replace')
 
-        mytemplate = mylookup.get_template(TEMPLATE_FILENAME)
+        mytemplate = mylookup.get_template(HTML_TEMPLATE_FILENAME)
 
-        with open(os.path.join(output_dir, REPORT_FILENAME), 'wb') as f:
+        with open(os.path.join(self.output_dir, HTML_REPORT_FILENAME), 'wb') as f:
             try:
                 f.write(mytemplate.render(**result))
             except:
                 print(mako.exceptions.text_error_template().render())
+
+        logging.info(u'  Done')
+        
+
+class TextReport(object):
+    def generate(self, result):
+        """生成报表
+        
+        :result: 分析结果
+        :returns: 无
+
+        """
+        mylookup = TemplateLookup(
+            directories=[TEXT_TEMPLATE_DIR],
+            input_encoding='utf-8',
+            encoding_errors='replace')
+
+        mytemplate = mylookup.get_template(TEXT_TEMPLATE_FILENAME)
+
+        try:
+            return mytemplate.render(**result)
+        except:
+            print(mako.exceptions.text_error_template().render())
+            return None
         
 
 if __name__ == "__main__":
@@ -453,7 +500,8 @@ TGW日志分析工具""")
     parser.add_argument('-v', '--verbose', action="store_true", dest="verbose", default=False, help=u"显示调试日志")
     parser.add_argument('-q', '--quiet',  action="store_true", dest="quiet", default=False, help=u"只显示警告以上级别的日志")
     parser.add_argument('--version',  action="version", version=VERSION, help=u"显示程序版本号后退出")
-    parser.add_argument('-o', '--output', action="store", dest="output_dir", default=OUTPUT_DIR, help=u"结果存放目录")
+    parser.add_argument('-o', '--output', action="store", dest="output_dir", default=DEFAULT_OUTPUT_DIR, help=u"结果存放目录")
+    parser.add_argument('--html',  action="store_true", dest="html_report", default=False, help=u"生成HTML报告")
     parser.add_argument('logfile', nargs=1, help=u"TGW日志文件路径")
 
     args = parser.parse_args()
@@ -480,8 +528,9 @@ TGW日志分析工具""")
 
     parser = TgwLogParser(args.logfile[0])
 
-    parser.parse()
+    result = parser.parse()
 
-    parser.report(args.output_dir)
-
-    logging.info(u'Done')
+    if args.html_report:
+        HtmlReport(args.output_dir).generate(result)
+    else:
+        print(TextReport().generate(result))
