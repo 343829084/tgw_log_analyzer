@@ -277,6 +277,7 @@ class ConnectionParser(ParserBase):
 
             self.active_conns[gw_id][conn_id] = {
                 'conn_id' : conn_id,
+                'gw_id' : gw_id,
                 'begin_time' : self.begin_time[gw_id],
                 'connect_time' : m.group('datetime'),
                 'close_time' : '',
@@ -297,6 +298,7 @@ class ConnectionParser(ParserBase):
 
             self.active_conns[gw_id][m.group('conn_id')] = {
                 'conn_id' : conn_id,
+                'gw_id' : gw_id,
                 'begin_time' : self.begin_time[gw_id],
                 'connect_time' : '',
                 'close_time' : m.group('datetime'),
@@ -333,7 +335,7 @@ class ConnectionParser(ParserBase):
     def on_startup(self, **kwargs):
         # 每次网关重启，都把之前的连接信息移到connections中
         for gw_id in self.active_conns.keys():
-            for conn_id in sorted(self.active_conns[gw_id].keys()):
+            for conn_id in sorted(self.active_conns[gw_id].keys(), key=int):
                 self.connections[gw_id].append(self.active_conns[gw_id][conn_id])
 
         self.active_conns.clear()
