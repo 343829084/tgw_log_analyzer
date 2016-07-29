@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import functools
+
 def thousands_sep(num):
     """把数字转换为带千位分隔符的字符串
 
@@ -30,3 +32,20 @@ def precision(digits=2):
 
     return filter
 
+def format_time(datetime, default='--'):
+    if datetime:
+        return str(datetime.time())
+    else:
+        return default
+
+def format_datetime(datetime, default='--'):
+    if datetime:
+        return str(datetime)
+    else:
+        return default
+
+def as_time(default='--'):
+    return functools.partial(format_time, default=default)
+
+def as_datetime(default='--'):
+    return functools.partial(format_datetime, default=default)

@@ -44,11 +44,11 @@ def summary(array):
     """
     return {
         'count' : len(array),
-        'std'   : np.std(array),
-        'max'   : np.max(array),
-        'min'   : np.min(array),
-        'mean'  : np.mean(array),
-        'p90'   : np.percentile(array, 0.9),
+        'std'   : array.std(),
+        'max'   : array.max(),
+        'min'   : array.min(),
+        'mean'  : array.mean(),
+        'p90'   : array.quantile(0.9),
     }
 
 
@@ -151,7 +151,7 @@ class ParserBase(object):
 
         可用于清理上一次启动留下的未结束的状态。
 
-        :
+        :kwargs: 相关的属性。其中的datetime已经是pandas.TimeStamp
         :returns: 无
         """
         pass
@@ -203,7 +203,7 @@ class StatusParser(ParserBase):
         self.__finish_last_status()
 
         df = pd.DataFrame.from_dict(self.statuses)
-        duration = df['end'] - df['begin']
+        duration = (df['end'] - df['begin']).dt.microseconds
         return Result(
             summary(duration),
             self.statuses)
@@ -211,10 +211,12 @@ class StatusParser(ParserBase):
     def __finish_last_status(self):
         """ 结束上一个状态块 """
         if self.status_begin_time:
+            begin_time = pd.to_datetime(self.status_begin_time)
+
             self.statuses.append({
-                'datetime': self.status_begin_time,
-                'begin':    DateTime.from_string(self.status_begin_time),
-                'end':      DateTime.from_string(self.last_status_time),
+                'datetime': begin_time,
+                'begin':    begin_time,
+                'end':      pd.to_datetime(self.last_status_time),
             })
 
             # 清一下状态，下次就不会重复进入
@@ -233,7 +235,11 @@ class RegexParser(ParserBase):
         if not m:
             return False
         
-        self.details.append(m.groupdict())
+        d = m.groupdict()
+        if 'datetime' in d:
+            d['datetime'] = pd.to_datetime(d['datetime'])
+
+        self.details.append(d)
         return True
 
     def finish(self):
@@ -265,7 +271,7 @@ class ConnectionParser(ParserBase):
     def parse(self, line):
         m = self.re_begin_conn.match(line)
         if m:
-            self.begin_time[m.group('gw_id')] = m.group('datetime')
+            self.begin_time[m.group('gw_id')] = pd.to_datetime(m.group('datetime'))
 
             logging.debug(u'    {datetime}: Gateway "{gw_id}" begin to connect {cs_addr}'.format(**m.groupdict()))
             return True
@@ -279,7 +285,7 @@ class ConnectionParser(ParserBase):
                 'conn_id' : conn_id,
                 'gw_id' : gw_id,
                 'begin_time' : self.begin_time[gw_id],
-                'connect_time' : m.group('datetime'),
+                'connect_time' : pd.to_datetime(m.group('datetime')),
                 'close_time' : '',
                 'gw_addr' : m.group('gw_addr'),
                 'cs_addr' : m.group('cs_addr'),
@@ -301,7 +307,7 @@ class ConnectionParser(ParserBase):
                 'gw_id' : gw_id,
                 'begin_time' : self.begin_time[gw_id],
                 'connect_time' : '',
-                'close_time' : m.group('datetime'),
+                'close_time' : pd.to_datetime(m.group('datetime')),
                 'gw_addr' : '',
                 'cs_addr' : m.group('cs_addr'),
                 'wanm_errno' : m.group('wanm_errno'),
@@ -317,7 +323,7 @@ class ConnectionParser(ParserBase):
             gw_id = m.group('gw_id')
 
             self.active_conns[gw_id][m.group('conn_id')].update({
-                'close_time' : m.group('datetime'),
+                'close_time' : pd.to_datetime(m.group('datetime')),
                 'wanm_errno' : m.group('wanm_errno'),
                 'wanm_errmsg' : m.group('wanm_errmsg'),
                 'status' : 'closed',
@@ -357,7 +363,7 @@ class StartupParser(ParserBase):
         if m:
             self.startups.append({
                 'startup_time': self.last_startup_time,
-                'shutdown_time' : m.group('datetime'),
+                'shutdown_time' : pd.to_datetime(m.group('datetime')),
                 'shutdown_reason' : m.group('reason'),
             })
             self.last_startup_time = ''
@@ -419,7 +425,7 @@ class TgwLogParser(object):
                 if last_line is None:   # 首行
                     m = self.re_datetime.search(line)
                     if m:
-                        self.first_time = m.group('datetime')
+                        self.first_time = pd.to_datetime(m.group('datetime'))
 
                 last_line = line
                 self.line_count += 1
@@ -428,8 +434,11 @@ class TgwLogParser(object):
                 if m:   # 检测到网关重启
                     logging.debug(u'  Gateway startup at {datetime}'.format(**m.groupdict()))
 
+                    d = m.groupdict()
+                    d['datetime'] = pd.to_datetime(d['datetime'])
+
                     for parser in self.parsers:
-                        parser.on_startup(**m.groupdict())
+                        parser.on_startup(**d)
 
                     continue
 
@@ -440,7 +449,7 @@ class TgwLogParser(object):
             if not last_line is None:   # 有末行
                 m = self.re_datetime.search(last_line)
                 if m:
-                    self.last_time = m.group('datetime')
+                    self.last_time = pd.to_datetime(m.group('datetime'))
 
         
         return self.get_result()

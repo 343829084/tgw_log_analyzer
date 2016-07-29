@@ -87,11 +87,11 @@
         </tr>
         <tr>
             <td>${status.summary['count'] | filters.thousands_sep}</td>
-            <td ${'class="warning"' if status.summary['mean'] >= 100000 else ''}>${status.summary['mean']/1000 | filters.precision(0), filters.thousands_sep}</td>
-            <td>${status.summary['std']/1000 | filters.precision(0), filters.thousands_sep}</td>
-            <td>${status.summary['min']/1000 | filters.precision(0), filters.thousands_sep}</td>
-            <td ${'class="warning"' if status.summary['max'] >= 500000 else ''}>${status.summary['max']/1000 | filters.precision(0), filters.thousands_sep}</td>
-            <td ${'class="warning"' if status.summary['p90'] >= 500000 else ''}>${status.summary['p90']/1000 | filters.precision(0), filters.thousands_sep}</td>
+            <td ${'class="warning"' if status.summary['mean'] >= 100000 else ''}>${status.summary['mean']/1000 | filters.precision(3), filters.thousands_sep}</td>
+            <td>${status.summary['std']/1000 | filters.precision(3), filters.thousands_sep}</td>
+            <td>${status.summary['min']/1000 | filters.precision(3), filters.thousands_sep}</td>
+            <td ${'class="warning"' if status.summary['max'] >= 500000 else ''}>${status.summary['max']/1000 | filters.precision(3), filters.thousands_sep}</td>
+            <td ${'class="warning"' if status.summary['p90'] >= 500000 else ''}>${status.summary['p90']/1000 | filters.precision(3), filters.thousands_sep}</td>
         </tr>
     </table>
 
@@ -107,8 +107,8 @@
         % for i in xrange(len(startups)):
         <tr>
             <td>${i + 1}</td>
-            <td>${startups[i]['startup_time'][-15:]}</td>
-            <td>${startups[i]['shutdown_time'][-15:]}</td>
+            <td>${filters.format_time(startups[i]['startup_time'])}</td>
+            <td>${filters.format_time(startups[i]['shutdown_time'])}</td>
             <td>${startups[i]['shutdown_reason']}</td>
         </tr>
         % endfor
@@ -141,9 +141,9 @@
                             'failed':u'连接失败',
                             'closed':u'连接后断开',
                         }[conn['status']]}</td>
-                    <td>${conn['begin_time']}</td>
-                    <td>${conn['connect_time']}</td>
-                    <td>${conn['close_time']}</td>
+                    <td>${filters.format_time(conn['begin_time'])}</td>
+                    <td>${filters.format_time(conn['connect_time'])}</td>
+                    <td>${filters.format_time(conn['close_time'])}</td>
                     <td>${conn['cs_addr']}</td>
                     <td>${conn['wanm_errno']}</td>
                     <td>${conn['wanm_errmsg']}</td>
