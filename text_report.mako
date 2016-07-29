@@ -33,11 +33,11 @@ startups[i]['shutdown_reason'])}
 Connections:
 % for gw_id in sorted(connections.keys()): 
     % for idx in xrange(len(connections[gw_id])):
-<% conn = connections[gw_id][idx] %>${u'{idx:3d} #{conn_id:<5s} {status:9s} {gw_id:12s} {begin_time:15s} {connect_time:15s} {close_time:15s} {cs_addr:21s} {wanm_errno:5s} {wanm_errmsg}'.format(
+<% conn = connections[gw_id][idx] %>${u'{idx:3d} #{conn_id:<5s} {status:9s} {gw_id:12s} {begin_time:15s} {connect_time:15s} {close_time:15s} {cs_addr:21s} {code:5s} {reason}'.format(
     idx=idx+1, conn_id=conn['conn_id'], status=conn['status'], gw_id=conn['gw_id'],
     begin_time=filters.format_datetime(conn['begin_time']),
     connect_time=filters.format_datetime(conn['connect_time']),
     close_time=filters.format_datetime(conn['close_time']),
-    cs_addr=conn['cs_addr'], wanm_errno=conn['wanm_errno'], wanm_errmsg=conn['wanm_errmsg'])}
+    cs_addr=conn['cs_addr'], code=conn['code'], reason=conn['reason'])}
     %endfor
 %endfor

@@ -128,8 +128,8 @@
                 <th>连接建立时间</th>
                 <th>连接断开时间</th>
                 <th>TCS地址</th>
-                <th>WanM错误码</th>
-                <th>WanM错误信息</th>
+                <th>错误码</th>
+                <th>错误信息</th>
             </tr>
             % for idx in xrange(len(conns)):
                 <% conn = conns[idx] %>
@@ -140,13 +140,14 @@
                             'connected':u'连接后未断开',
                             'failed':u'连接失败',
                             'closed':u'连接后断开',
+                            'logout':u'登录失败',
                         }[conn['status']]}</td>
                     <td>${filters.format_time(conn['begin_time'])}</td>
                     <td>${filters.format_time(conn['connect_time'])}</td>
                     <td>${filters.format_time(conn['close_time'])}</td>
                     <td>${conn['cs_addr']}</td>
-                    <td>${conn['wanm_errno']}</td>
-                    <td>${conn['wanm_errmsg']}</td>
+                    <td>${conn['code']}</td>
+                    <td>${conn['reason']}</td>
                 </tr>
             % endfor
         </table>

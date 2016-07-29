@@ -254,10 +254,13 @@ class ConnectionParser(ParserBase):
         RE_DATETIME + r'.*@sscc::gateway::CsComm(:?::|@)OnConnectOK@.*@Success: CsConnection (?P<conn_id>\d+)\(CS_Connected\) - (?P<gw_addr>[0-9:.]+) to (?P<cs_addr>[0-9:.]+) of tag (?P<gw_id>\w+) to .*')
 
     re_connect_fail = re.compile(
-        RE_DATETIME + r'.*@sscc::gateway::CsComm(:?::|@)OnConnectFail@.*@@Failed to create CsConnection of tag (?P<gw_id>\w+). WanM error code: (?P<wanm_errno>\d+):(?P<wanm_errmsg>.+)\. Reconnecting after \d+ seconds...@CsConnection (?P<conn_id>\d+)(CS_DisConnected) - unknown:0 to (?P<cs_addr>[0-9:.]+) to .*')
+        RE_DATETIME + r'.*@sscc::gateway::CsComm(:?::|@)OnConnectFail@.*@@Failed to create CsConnection of tag (?P<gw_id>\w+). WanM error code: (?P<code>\d+):(?P<reason>.+)\. Reconnecting after \d+ seconds...@CsConnection (?P<conn_id>\d+)(CS_DisConnected) - unknown:0 to (?P<cs_addr>[0-9:.]+) to .*')
 
     re_connection_close = re.compile(
-        RE_DATETIME + r'.*@sscc::gateway::CsComm(:?::|@)OnConnectionClose@.*@CsConnection (?P<conn_id>\d+)\(CS_Closed\) - (?P<gw_addr>[0-9:.]+) to (?P<cs_addr>[0-9:.]+) of tag (?P<gw_id>\w+) to \S+ is closed. WanM error code: (?P<wanm_errno>\d+):(?P<wanm_errmsg>.+)\. Reconnecting after .*') 
+        RE_DATETIME + r'.*@sscc::gateway::CsComm(:?::|@)OnConnectionClose@.*@CsConnection (?P<conn_id>\d+)\(CS_Closed\) - (?P<gw_addr>[0-9:.]+) to (?P<cs_addr>[0-9:.]+) of tag (?P<gw_id>\w+) to \S+ is closed. WanM error code: (?P<code>\d+):(?P<reason>.+)\. Reconnecting after .*') 
+
+    re_connection_logout = re.compile(
+        RE_DATETIME + r'.*@sscc::gateway::CsConnection(:?::|@)HandleLogout@.*@Received logout message, code: (?P<code>\d+),\s*(?P<reason>[^@]+)@Connection (?P<conn_id>\d+)\(CS_Connected\) - (?P<gw_addr>[0-9:.]+) to (?P<cs_addr>[0-9:.]+) of tag (?P<gw_id>\w+).*') 
 
     def __init__(self, parser_name='connections'):
         super(ConnectionParser, self).__init__(parser_name)
@@ -289,8 +292,8 @@ class ConnectionParser(ParserBase):
                 'close_time' : '',
                 'gw_addr' : m.group('gw_addr'),
                 'cs_addr' : m.group('cs_addr'),
-                'wanm_errno' : '',
-                'wanm_errmsg' : '',
+                'code' : '',
+                'reason' : '',
                 'status' : 'connected',
             }
 
@@ -302,7 +305,7 @@ class ConnectionParser(ParserBase):
             gw_id = m.group('gw_id')
             conn_id = m.group('conn_id')
 
-            self.active_conns[gw_id][m.group('conn_id')] = {
+            self.active_conns[gw_id][conn_id] = {
                 'conn_id' : conn_id,
                 'gw_id' : gw_id,
                 'begin_time' : self.begin_time[gw_id],
@@ -310,38 +313,56 @@ class ConnectionParser(ParserBase):
                 'close_time' : pd.to_datetime(m.group('datetime')),
                 'gw_addr' : '',
                 'cs_addr' : m.group('cs_addr'),
-                'wanm_errno' : m.group('wanm_errno'),
-                'wanm_errmsg' : m.group('wanm_errmsg'),
+                'code' : m.group('code'),
+                'reason' : m.group('reason'),
                 'status' : 'failed',
             }
 
-            logging.debug(u'    {datetime}: Gateway "{gw_id}" (#{conn_id}) failed to connect to {cs_addr}: {wanm_errno}, {wanm_errmsg}'.format(**m.groupdict()))
+            logging.debug(u'    {datetime}: Gateway "{gw_id}" (#{conn_id}) failed to connect to {cs_addr}: {code}, {reason}'.format(**m.groupdict()))
+            return True
+        
+        m = self.re_connection_logout.match(line)
+        if m:
+            self.close_connection(m, 'logout')
             return True
         
         m = self.re_connection_close.match(line)
         if m:
-            gw_id = m.group('gw_id')
-
-            self.active_conns[gw_id][m.group('conn_id')].update({
-                'close_time' : pd.to_datetime(m.group('datetime')),
-                'wanm_errno' : m.group('wanm_errno'),
-                'wanm_errmsg' : m.group('wanm_errmsg'),
-                'status' : 'closed',
-            })
-
-            logging.debug(u'    {datetime}: Gateway "{gw_id}" (#{conn_id}) disconnected from {cs_addr}: {wanm_errno}, {wanm_errmsg}'.format(**m.groupdict()))
+            self.close_connection(m, 'closed')
             return True
         
         return False
 
+    def close_connection(self, m, status):
+        gw_id = m.group('gw_id')
+        conn_id = m.group('conn_id')
+
+        if conn_id in self.active_conns[gw_id]:
+            # 本连接前面还没有找到断开原因。
+            self.active_conns[gw_id][conn_id].update({
+                'close_time' : pd.to_datetime(m.group('datetime')),
+                'code' : m.group('code'),
+                'reason' : m.group('reason'),
+                'status' : status,
+            })
+            self.connections[gw_id].append(self.active_conns[gw_id][conn_id])
+            del self.active_conns[gw_id][conn_id]
+
+            logging.debug(u'    {datetime}: Gateway "{gw_id}" (#{conn_id}) disconnected from {cs_addr}: {code}, {reason}'.format(**m.groupdict()))
+
     def finish(self):
         self.on_startup()
+
+        # 按连接ID排序，基本上就是按时间
+        for gw_id in self.connections:
+            self.connections[gw_id] = sorted(self.connections[gw_id], key=lambda conn: int(conn['conn_id']))
+
         return self.connections
 
     def on_startup(self, **kwargs):
         # 每次网关重启，都把之前的连接信息移到connections中
         for gw_id in self.active_conns.keys():
-            for conn_id in sorted(self.active_conns[gw_id].keys(), key=int):
+            for conn_id in self.active_conns[gw_id]:
                 self.connections[gw_id].append(self.active_conns[gw_id][conn_id])
 
         self.active_conns.clear()
