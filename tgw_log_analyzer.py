@@ -9,6 +9,8 @@ from collections import defaultdict
 import exceptions
 import locale
 import logging
+import matplotlib
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import re
@@ -19,10 +21,11 @@ from distutils.dir_util import mkpath
 from mako.template import Template
 from mako.lookup import TemplateLookup
 
-VERSION=u"20160608"
+VERSION=u"20160802"
 
 # 存放结果的目录
 DEFAULT_OUTPUT_DIR = 'result'
+DEFAULT_LOG_ENCODING = 'utf-8'
 
 # HTML报告模板目录
 HTML_TEMPLATE_DIR = '.'
@@ -254,7 +257,7 @@ class ConnectionParser(ParserBase):
         RE_DATETIME + r'.*@sscc::gateway::CsComm(:?::|@)OnConnectOK@.*@Success: CsConnection (?P<conn_id>\d+)\(CS_Connected\) - (?P<gw_addr>[0-9:.]+) to (?P<cs_addr>[0-9:.]+) of tag (?P<gw_id>\w+) to .*')
 
     re_connect_fail = re.compile(
-        RE_DATETIME + r'.*@sscc::gateway::CsComm(:?::|@)OnConnectFail@.*@@Failed to create CsConnection of tag (?P<gw_id>\w+). WanM error code: (?P<code>\d+):(?P<reason>.+)\. Reconnecting after \d+ seconds...@CsConnection (?P<conn_id>\d+)(CS_DisConnected) - unknown:0 to (?P<cs_addr>[0-9:.]+) to .*')
+        RE_DATETIME + r'.*@sscc::gateway::CsComm(:?::|@)OnConnectFail@.*@Failed to create CsConnection of tag (?P<gw_id>\w+)\. WanM error code: (?P<code>\d+):(?P<reason>.+)\. Reconnecting after \d+ seconds\.\.\.@CsConnection (?P<conn_id>\d+)\(CS_DisConnected\) - unknown:0 to (?P<cs_addr>[0-9:.]+) to .*')
 
     re_connection_close = re.compile(
         RE_DATETIME + r'.*@sscc::gateway::CsComm(:?::|@)OnConnectionClose@.*@CsConnection (?P<conn_id>\d+)\(CS_Closed\) - (?P<gw_addr>[0-9:.]+) to (?P<cs_addr>[0-9:.]+) of tag (?P<gw_id>\w+) to \S+ is closed. WanM error code: (?P<code>\d+):(?P<reason>.+)\. Reconnecting after .*') 
@@ -262,14 +265,19 @@ class ConnectionParser(ParserBase):
     re_connection_logout = re.compile(
         RE_DATETIME + r'.*@sscc::gateway::CsConnection(:?::|@)HandleLogout@.*@Received logout message, code: (?P<code>\d+),\s*(?P<reason>[^@]+)@Connection (?P<conn_id>\d+)\(CS_Connected\) - (?P<gw_addr>[0-9:.]+) to (?P<cs_addr>[0-9:.]+) of tag (?P<gw_id>\w+).*') 
 
+    re_wanm_error = re.compile(
+        RE_DATETIME + r'.*@sscc::gateway::CsComm.*@WanM ERROR@(?:Ssl )?Connection<(?P<conn_id>\d+)\([^)]+\) - \S+ to (?P<cs_addr>[0-9:.]+)> - (?P<reason>.+)')
+
     def __init__(self, parser_name='connections'):
         super(ConnectionParser, self).__init__(parser_name)
         #: 网关ID -> 连接信息。连接信息为详细信息的列表
         self.connections = defaultdict(list)
-        #: 当前连接上当前活动的连接。网关ID -> 连接信息。连接信息为dict(连接ID -> 详细信息)
-        self.active_conns = defaultdict(dict)
+        #: 当前连接上当前活动的连接。连接ID -> 连接信息
+        self.active_conns = dict()
         #: 网关ID -> 开始连接时间
         self.begin_time = dict()                
+        #: 记录每个连接首次WanM出错信息
+        self.wanm_error_conns = dict()
 
     def parse(self, line):
         m = self.re_begin_conn.match(line)
@@ -284,7 +292,7 @@ class ConnectionParser(ParserBase):
             gw_id = m.group('gw_id')
             conn_id = m.group('conn_id')
 
-            self.active_conns[gw_id][conn_id] = {
+            self.active_conns[conn_id] = {
                 'conn_id' : conn_id,
                 'gw_id' : gw_id,
                 'begin_time' : self.begin_time[gw_id],
@@ -305,7 +313,7 @@ class ConnectionParser(ParserBase):
             gw_id = m.group('gw_id')
             conn_id = m.group('conn_id')
 
-            self.active_conns[gw_id][conn_id] = {
+            conn = {
                 'conn_id' : conn_id,
                 'gw_id' : gw_id,
                 'begin_time' : self.begin_time[gw_id],
@@ -313,42 +321,61 @@ class ConnectionParser(ParserBase):
                 'close_time' : pd.to_datetime(m.group('datetime')),
                 'gw_addr' : '',
                 'cs_addr' : m.group('cs_addr'),
-                'code' : m.group('code'),
+                'code' : 'WanM_' + m.group('code'),
                 'reason' : m.group('reason'),
                 'status' : 'failed',
             }
 
-            logging.debug(u'    {datetime}: Gateway "{gw_id}" (#{conn_id}) failed to connect to {cs_addr}: {code}, {reason}'.format(**m.groupdict()))
+            if conn_id in self.wanm_error_conns:
+                # 此连接之前已经报错，之前的出错信息才是真正的原因
+                conn.update(self.wanm_error_conns[conn_id])
+
+            self.connections[gw_id].append(conn)
+
+            logging.debug(u'    {close_time}: Gateway "{gw_id}" (#{conn_id}) failed to connect to {cs_addr}: {code}, {reason}'.format(**conn))
+            return True
+        
+        m = self.re_wanm_error.match(line)
+        if m:
+            d = m.groupdict()
+            if d['conn_id'] not in self.wanm_error_conns:
+                self.wanm_error_conns[d['conn_id']] = {
+                    'close_time' : pd.to_datetime(d['datetime']),
+                    'code' : 'WanM',
+                    'reason' : d['reason'],
+                }
+
             return True
         
         m = self.re_connection_logout.match(line)
         if m:
-            self.close_connection(m, 'logout')
+            self.close_connection('logout_', m.groupdict(), 'logout')
             return True
         
         m = self.re_connection_close.match(line)
         if m:
-            self.close_connection(m, 'closed')
+            self.close_connection('WanM_', m.groupdict(), 'closed')
             return True
         
         return False
 
-    def close_connection(self, m, status):
-        gw_id = m.group('gw_id')
-        conn_id = m.group('conn_id')
+    def close_connection(self, code_prefix, m, status):
+        conn_id = m['conn_id']
 
-        if conn_id in self.active_conns[gw_id]:
+        if conn_id in self.active_conns:
             # 本连接前面还没有找到断开原因。
-            self.active_conns[gw_id][conn_id].update({
-                'close_time' : pd.to_datetime(m.group('datetime')),
-                'code' : m.group('code'),
-                'reason' : m.group('reason'),
+            conn = self.active_conns[conn_id]
+
+            conn.update({
+                'close_time' : pd.to_datetime(m['datetime']),
+                'code' : code_prefix + (m['code'] if 'code' in m else ''),
+                'reason' : m['reason'],
                 'status' : status,
             })
-            self.connections[gw_id].append(self.active_conns[gw_id][conn_id])
-            del self.active_conns[gw_id][conn_id]
+            self.connections[conn['gw_id']].append(conn)
+            del self.active_conns[conn_id]
 
-            logging.debug(u'    {datetime}: Gateway "{gw_id}" (#{conn_id}) disconnected from {cs_addr}: {code}, {reason}'.format(**m.groupdict()))
+            logging.debug(u'    {datetime}: Gateway "{gw_id}" (#{conn_id}) disconnected from {cs_addr}: {code}, {reason}'.format(**m))
 
     def finish(self):
         self.on_startup()
@@ -361,9 +388,9 @@ class ConnectionParser(ParserBase):
 
     def on_startup(self, **kwargs):
         # 每次网关重启，都把之前的连接信息移到connections中
-        for gw_id in self.active_conns.keys():
-            for conn_id in self.active_conns[gw_id]:
-                self.connections[gw_id].append(self.active_conns[gw_id][conn_id])
+        for conn_id in self.active_conns:
+            conn = self.active_conns[conn_id]
+            self.connections[conn['gw_id']].append(conn)
 
         self.active_conns.clear()
 
@@ -410,12 +437,14 @@ class TgwLogParser(object):
     re_startup = re.compile(
         RE_DATETIME + r'.*@cppf::common::SzseApp(:?::|@)InitLog@.*')
 
-    def __init__(self, filename):
+    def __init__(self, filename, log_encoding):
         """构造函数.
 
         :filename: 要解释的日志文件名
+        :log_encoding: 日志文件的字符编码
         """
         self.filename = filename
+        self.log_encoding = log_encoding
         self.parsers = (
             StatusParser(),
             ConnectionParser('connections'),
@@ -432,17 +461,28 @@ class TgwLogParser(object):
         self.line_count = 0
         self.re_datetime = re.compile(RE_DATETIME)
 
-    def parse(self):
+    def parse(self, progress_callback=None):
         """解释一个日志文件
 
+        :progress_callback: 进度回调。两个参数：总字节数，当前字节数
         :returns: 无
         """
         last_line = None
 
         logging.info(u'Analyzing log file "{0}"...'.format(self.filename))
 
-        with open(self.filename, 'rt') as f:
+        with open(self.filename, 'rb') as f:
+            file_size = 0
+
+            if 'seekable' in dir(f):
+                # 取文件长度
+                f.seek(0, os.SEEK_END)
+                file_size = f.tell()
+                f.seek(0, os.SEEK_BEGIN)
+
             for line in f:
+                line = line.decode(self.log_encoding)
+
                 if last_line is None:   # 首行
                     m = self.re_datetime.search(line)
                     if m:
@@ -566,7 +606,9 @@ TGW日志分析工具""")
     parser.add_argument('-q', '--quiet',  action="store_true", dest="quiet", default=False, help=u"只显示警告以上级别的日志")
     parser.add_argument('--version',  action="version", version=VERSION, help=u"显示程序版本号后退出")
     parser.add_argument('-o', '--output', action="store", dest="output_dir", default=DEFAULT_OUTPUT_DIR, help=u"结果存放目录")
+    parser.add_argument('-e', '--encoding', action="store", dest="log_encoding", default=DEFAULT_LOG_ENCODING, help=u"日志文件的编码")
     parser.add_argument('--html',  action="store_true", dest="html_report", default=False, help=u"生成HTML报告")
+    parser.add_argument('--text',  action="store_true", dest="text_report", default=False, help=u"生成文本报告")
     parser.add_argument('logfile', nargs=1, help=u"TGW日志文件路径")
 
     args = parser.parse_args()
@@ -591,11 +633,16 @@ TGW日志分析工具""")
     else:
         logging.basicConfig(level=logging.INFO, format=log_format)
 
-    parser = TgwLogParser(args.logfile[0])
+    matplotlib.style.use('ggplot')
+
+    parser = TgwLogParser(args.logfile[0], args.log_encoding)
 
     result = parser.parse()
 
     if args.html_report:
         HtmlReport(args.output_dir).generate(result)
     else:
+        args.text_report = True
+
+    if args.text_report:
         print(TextReport().generate(result))
