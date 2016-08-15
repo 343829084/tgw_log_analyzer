@@ -25,7 +25,7 @@ VERSION=u"20160802"
 
 # 存放结果的目录
 DEFAULT_OUTPUT_DIR = 'result'
-DEFAULT_LOG_ENCODING = 'utf-8'
+DEFAULT_LOG_ENCODING = 'utf-8,gbk'
 
 # HTML报告模板目录
 HTML_TEMPLATE_DIR = '.'
@@ -441,10 +441,14 @@ class TgwLogParser(object):
         """构造函数.
 
         :filename: 要解释的日志文件名
-        :log_encoding: 日志文件的字符编码
+        :log_encoding: 日志文件的字符编码。可以为list，会依次用
         """
         self.filename = filename
-        self.log_encoding = log_encoding
+        if isinstance(log_encoding, str):
+            self.log_encodings = [log_encoding,]
+        else:
+            self.log_encodings = log_encoding
+
         self.parsers = (
             StatusParser(),
             ConnectionParser('connections'),
@@ -480,8 +484,28 @@ class TgwLogParser(object):
                 file_size = f.tell()
                 f.seek(0, os.SEEK_BEGIN)
 
+            line_num = 0
+            last_encoding_idx = 0
+            encoding_count = len(self.log_encodings)
+
             for line in f:
-                line = line.decode(self.log_encoding)
+                line_num += 1
+
+                # 尝试每种编码，从上次成功的开始尝试
+                for i in xrange(encoding_count):
+                    try:
+                        encoding_idx = (last_encoding_idx + i) % encoding_count
+                        line = line.decode(self.log_encodings[encoding_idx])
+
+                        if i > 0:
+                            logging.debug(u'    Encoding is changed from {0} to {1}'.format(
+                                self.log_encodings[last_encoding_idx], self.log_encodings[encoding_idx]))
+                            last_encoding_idx = encoding_idx
+                        break
+                    except Exception as e:
+                        pass
+                else:
+                    logging.warning(u'  Error decoding line #{0}: {1}'.format(line_num, e))
 
                 if last_line is None:   # 首行
                     m = self.re_datetime.search(line)
@@ -606,7 +630,7 @@ TGW日志分析工具""")
     parser.add_argument('-q', '--quiet',  action="store_true", dest="quiet", default=False, help=u"只显示警告以上级别的日志")
     parser.add_argument('--version',  action="version", version=VERSION, help=u"显示程序版本号后退出")
     parser.add_argument('-o', '--output', action="store", dest="output_dir", default=DEFAULT_OUTPUT_DIR, help=u"结果存放目录")
-    parser.add_argument('-e', '--encoding', action="store", dest="log_encoding", default=DEFAULT_LOG_ENCODING, help=u"日志文件的编码")
+    parser.add_argument('-e', '--encoding', action="store", dest="log_encoding", default=DEFAULT_LOG_ENCODING, help=u"日志文件的编码。多个编码以半角逗号分隔")
     parser.add_argument('--html',  action="store_true", dest="html_report", default=False, help=u"生成HTML报告")
     parser.add_argument('--text',  action="store_true", dest="text_report", default=False, help=u"生成文本报告")
     parser.add_argument('logfile', nargs=1, help=u"TGW日志文件路径")
@@ -635,7 +659,7 @@ TGW日志分析工具""")
 
     matplotlib.style.use('ggplot')
 
-    parser = TgwLogParser(args.logfile[0], args.log_encoding)
+    parser = TgwLogParser(args.logfile[0], args.log_encoding.split(','))
 
     result = parser.parse()
 
