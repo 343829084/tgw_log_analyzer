@@ -78,8 +78,8 @@ class DateTime(object):
     def to_string(cls, t):
         return '{0:02}:{1:02}:{2:02}.{3:03}'.format(
             t / 10000000, t / 100000 % 100, t / 100 % 100, t % 1000)
-        
-            
+
+
 class Result(object):
     def __init__(self, summary, details, datetimes=None):
         """初始化.
@@ -163,7 +163,7 @@ class ParserBase(object):
 class StatusParser(ParserBase):
 
     """分析LogCurrentStatus的类"""
-    
+
     # LogCurrentStatus行
     re_line_log_status = re.compile(
         RE_DATETIME + r'@2@.*LogCurrentStatus@[^@]+@[^@]+@(?P<content>[^@]+)@.*')
@@ -191,7 +191,7 @@ class StatusParser(ParserBase):
         m = self.re_line_log_status.match(line)
         if not m:
             return False
-        
+
         content = m.group('content')
         if self.re_line_log_status_begin.match(content):
             self.__finish_last_status()
@@ -225,7 +225,7 @@ class StatusParser(ParserBase):
             # 清一下状态，下次就不会重复进入
             self.status_begin_time = ''
 
-        
+
 class RegexParser(ParserBase):
     def __init__(self, parser_name, regex):
         super(RegexParser, self).__init__(parser_name)
@@ -237,7 +237,7 @@ class RegexParser(ParserBase):
         m = self.re.match(line)
         if not m:
             return False
-        
+
         d = m.groupdict()
         if 'datetime' in d:
             d['datetime'] = pd.to_datetime(d['datetime'])
@@ -260,10 +260,10 @@ class ConnectionParser(ParserBase):
         RE_DATETIME + r'.*@sscc::gateway::CsComm(:?::|@)OnConnectFail@.*@Failed to create CsConnection of tag (?P<gw_id>\w+)\. WanM error code: (?P<code>\d+):(?P<reason>.+)\. Reconnecting after \d+ seconds\.\.\.@CsConnection (?P<conn_id>\d+)\(CS_DisConnected\) - unknown:0 to (?P<cs_addr>[0-9:.]+) to .*')
 
     re_connection_close = re.compile(
-        RE_DATETIME + r'.*@sscc::gateway::CsComm(:?::|@)OnConnectionClose@.*@CsConnection (?P<conn_id>\d+)\(CS_Closed\) - (?P<gw_addr>[0-9:.]+) to (?P<cs_addr>[0-9:.]+) of tag (?P<gw_id>\w+) to \S+ is closed. WanM error code: (?P<code>\d+):(?P<reason>.+)\. Reconnecting after .*') 
+        RE_DATETIME + r'.*@sscc::gateway::CsComm(:?::|@)OnConnectionClose@.*@CsConnection (?P<conn_id>\d+)\(CS_Closed\) - (?P<gw_addr>[0-9:.]+) to (?P<cs_addr>[0-9:.]+) of tag (?P<gw_id>\w+) to \S+ is closed. WanM error code: (?P<code>\d+):(?P<reason>.+)\. Reconnecting after .*')
 
     re_connection_logout = re.compile(
-        RE_DATETIME + r'.*@sscc::gateway::CsConnection(:?::|@)HandleLogout@.*@Received logout message, code: (?P<code>\d+),\s*(?P<reason>[^@]+)@Connection (?P<conn_id>\d+)\(CS_Connected\) - (?P<gw_addr>[0-9:.]+) to (?P<cs_addr>[0-9:.]+) of tag (?P<gw_id>\w+).*') 
+        RE_DATETIME + r'.*@sscc::gateway::CsConnection(:?::|@)HandleLogout@.*@Received logout message, code: (?P<code>\d+),\s*(?P<reason>[^@]+)@Connection (?P<conn_id>\d+)\(CS_Connected\) - (?P<gw_addr>[0-9:.]+) to (?P<cs_addr>[0-9:.]+) of tag (?P<gw_id>\w+).*')
 
     re_wanm_error = re.compile(
         RE_DATETIME + r'.*@sscc::gateway::CsComm.*@WanM ERROR@(?:Ssl )?Connection<(?P<conn_id>\d+)\([^)]+\) - \S+ to (?P<cs_addr>[0-9:.]+)> - (?P<reason>.+)')
@@ -275,7 +275,7 @@ class ConnectionParser(ParserBase):
         #: 当前连接上当前活动的连接。连接ID -> 连接信息
         self.active_conns = dict()
         #: 网关ID -> 开始连接时间
-        self.begin_time = dict()                
+        self.begin_time = defaultdict(str)
         #: 记录每个连接首次WanM出错信息
         self.wanm_error_conns = dict()
 
@@ -286,7 +286,7 @@ class ConnectionParser(ParserBase):
 
             logging.debug(u'    {datetime}: Gateway "{gw_id}" begin to connect {cs_addr}'.format(**m.groupdict()))
             return True
-        
+
         m = self.re_connect_ok.match(line)
         if m:
             gw_id = m.group('gw_id')
@@ -307,7 +307,7 @@ class ConnectionParser(ParserBase):
 
             logging.debug(u'    {datetime}: Gateway "{gw_id}" (#{conn_id}) connected to {cs_addr}'.format(**m.groupdict()))
             return True
-        
+
         m = self.re_connect_fail.match(line)
         if m:
             gw_id = m.group('gw_id')
@@ -334,7 +334,7 @@ class ConnectionParser(ParserBase):
 
             logging.debug(u'    {close_time}: Gateway "{gw_id}" (#{conn_id}) failed to connect to {cs_addr}: {code}, {reason}'.format(**conn))
             return True
-        
+
         m = self.re_wanm_error.match(line)
         if m:
             d = m.groupdict()
@@ -346,17 +346,17 @@ class ConnectionParser(ParserBase):
                 }
 
             return True
-        
+
         m = self.re_connection_logout.match(line)
         if m:
             self.close_connection('logout_', m.groupdict(), 'logout')
             return True
-        
+
         m = self.re_connection_close.match(line)
         if m:
             self.close_connection('WanM_', m.groupdict(), 'closed')
             return True
-        
+
         return False
 
     def close_connection(self, code_prefix, m, status):
@@ -405,7 +405,7 @@ class StartupParser(ParserBase):
         super(StartupParser, self).__init__(parser_name)
         self.startups = list()
         self.last_startup_time = ''
-    
+
     def parse(self, line):
         m = self.re_shutdown_win.match(line)
         if m:
@@ -416,7 +416,7 @@ class StartupParser(ParserBase):
             })
             self.last_startup_time = ''
             return True
-        
+
     def on_startup(self, **kwargs):
         self.last_startup_time = kwargs['datetime']
 
@@ -536,7 +536,7 @@ class TgwLogParser(object):
                 if m:
                     self.last_time = pd.to_datetime(m.group('datetime'))
 
-        
+
         return self.get_result()
 
     def get_result(self):
@@ -559,7 +559,7 @@ class TgwLogParser(object):
 class HtmlReport(object):
     def __init__(self, output_dir):
         """构造函数
-        
+
         :output_dir: 存放报告的目录
         :returns: 无
 
@@ -568,7 +568,7 @@ class HtmlReport(object):
 
     def generate(self, result):
         """生成报表
-        
+
         :result: 分析结果
         :returns: 无
 
@@ -594,12 +594,12 @@ class HtmlReport(object):
                 print(mako.exceptions.text_error_template().render())
 
         logging.info(u'  Done')
-        
+
 
 class TextReport(object):
     def generate(self, result):
         """生成报表
-        
+
         :result: 分析结果
         :returns: 无
 
@@ -616,7 +616,7 @@ class TextReport(object):
         except:
             print(mako.exceptions.text_error_template().render())
             return None
-        
+
 
 if __name__ == "__main__":
     sys.stdout = codecs.getwriter(locale.getpreferredencoding())(sys.stdout)
