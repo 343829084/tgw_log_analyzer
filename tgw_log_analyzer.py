@@ -429,6 +429,7 @@ class StartupParser(ParserBase):
             })
         return self.startups
 
+
 class TgwLogParser(object):
 
     """TGW日志解释类"""
@@ -454,7 +455,13 @@ class TgwLogParser(object):
             ConnectionParser('connections'),
             RegexParser(
                 'version',
-                r'.*app started, Version Info: .* (?P<variant>RELEASE|DEBUG) version:(?P<version>.*?) revision:(?P<revision>\d+).*'),
+                r''.join([
+                    r'.*',
+                    r'app started, Version Info: .* (?P<variant>RELEASE|DEBUG) version:(?P<version>.*?) revision:(?P<revision>\d+)',
+                    r'.*',
+                    r'cmd line:\s*(?P<cmdline>.*)',
+                    r'$'
+                ])),
             RegexParser(
                 'os',
                 r'.*osType:(?P<type>.*), osVersion:(?P<version>.*), cpuType:(?P<cpu>.*), cpuBits:(?P<bits>.*), memorySize:(?P<memory>\w+).*'),
