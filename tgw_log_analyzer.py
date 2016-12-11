@@ -612,7 +612,7 @@ class HtmlReport(object):
         mytemplate = env.get_template(HTML_TEMPLATE_FILENAME)
 
         with open(os.path.join(self.output_dir, HTML_REPORT_FILENAME), 'wb') as f:
-            f.write(mytemplate.render(**result))
+            f.write(mytemplate.render(**result).encode('utf-8'))
 
         logging.info(u'  Done')
 

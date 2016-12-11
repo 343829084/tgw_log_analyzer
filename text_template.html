@@ -13,7 +13,7 @@ Memory: {{os.details[0]['memory']}}
 {%- endif%}
 
 Status logs:
-count: {{'{:,}'.format(status.summary['count'])}}  mean: {{'{:,.3f}'.format(status.summary['mean']/1000)}}ms  std: {{'{:,.3f}'.format(status.summary['std']/1000)}}ms  min: {{'{:,.3f}'.format(status.summary['min']/1000)}}ms  max: {{'{:,.3f}'.format(status.summary['max']/1000)}}ms  p90: {{'{:,.3f}'.format(status.summary['p90']/1000)}}ms
+count: {{(status.summary['count']) | thousands_sep}}  mean: {{(status.summary['mean']/1000) | thousands_sep(3)}}ms  std: {{(status.summary['std']/1000) | thousands_sep(3)}}ms  min: {{(status.summary['min']/1000) | thousands_sep(3)}}ms  max: {{(status.summary['max']/1000) | thousands_sep(3)}}ms  p90: {{(status.summary['p90']/1000) | thousands_sep(3)}}ms
 
 {% if startups|length > 0 -%}
 Gateway startups:
