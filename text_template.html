@@ -1,0 +1,41 @@
+log file name:   {{summary['filename']}}
+line count:      {{summary['line_count']}}
+start time:      {{summary['first_time']}}
+end time:        {{summary['last_time']}}
+{%- if version.details%}
+gateway version: {{version.details[0]['version']}}, svn revision: {{version.details[0]['revision']}}
+{% endif %}
+
+{%- if os.details%}
+OS:     {{os.details[0]['type']}}, {{os.details[0]['version']}}
+CPU:    {{os.details[0]['cpu']|trim}} ({{os.details[0]['bits']}})
+Memory: {{os.details[0]['memory']}}
+{%- endif%}
+
+Status logs:
+count: {{'{:,}'.format(status.summary['count'])}}  mean: {{'{:,.3f}'.format(status.summary['mean']/1000)}}ms  std: {{'{:,.3f}'.format(status.summary['std']/1000)}}ms  min: {{'{:,.3f}'.format(status.summary['min']/1000)}}ms  max: {{'{:,.3f}'.format(status.summary['max']/1000)}}ms  p90: {{'{:,.3f}'.format(status.summary['p90']/1000)}}ms
+
+{% if startups|length > 0 -%}
+Gateway startups:
+{{'{:3} {:15s} {:15s} {:}'.format('IDX', 'Startup', 'Shutdown', 'Reason')}}
+    {%- for startup in startups %}
+{{'{:3} {:15s} {:15s} {:}'.format(
+    loop.index,
+    startup['startup_time']|as_time,
+    startup['shutdown_time']|as_time,
+    startup['shutdown_reason']
+)}}
+    {%- endfor %}
+{%- endif %}
+
+Connections:
+{% for gw_id, gw_conns in connections|dictsort: -%}
+    {%- for conn in gw_conns -%}
+{{'{idx:3d} #{conn_id:<5s} {status:9s} {gw_id:12s} {begin_time:15s} {connect_time:15s} {close_time:15s} {cs_addr:21s} {code:5s} {reason}'.format(
+    idx=loop.index, conn_id=conn['conn_id'], status=conn['status'], gw_id=conn['gw_id'],
+    begin_time=conn['begin_time']|as_time,
+    connect_time=conn['connect_time']|as_time,
+    close_time=conn['close_time']|as_time,
+    cs_addr=conn['cs_addr'], code=conn['code'], reason=conn['reason'])}}
+    {%- endfor %}
+{%- endfor %}

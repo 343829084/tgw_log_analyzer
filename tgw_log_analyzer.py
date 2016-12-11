@@ -10,16 +10,18 @@ import exceptions
 import locale
 import logging
 import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import re
 import os
 import sys
-import mako
+import inspect
+import jinja2
 from distutils.dir_util import mkpath
-from mako.template import Template
-from mako.lookup import TemplateLookup
+
+import filters
 
 VERSION=u"20160802"
 
@@ -29,12 +31,12 @@ DEFAULT_LOG_ENCODING = 'utf-8,gbk'
 
 # HTML报告模板目录
 HTML_TEMPLATE_DIR = '.'
-HTML_TEMPLATE_FILENAME = 'html_report.mako'
+HTML_TEMPLATE_FILENAME = 'html_template.html'
 HTML_REPORT_FILENAME = 'index.html'
 
 # TEXT报告模板目录
 TEXT_TEMPLATE_DIR = '.'
-TEXT_TEMPLATE_FILENAME = 'text_report.mako'
+TEXT_TEMPLATE_FILENAME = 'text_template.html'
 
 RE_DATETIME = r'^\](?P<datetime>\d{4}-[^@]+)'
 
@@ -563,6 +565,24 @@ class TgwLogParser(object):
         return result
 
 
+def import_filters(module):
+    """把module中的函数变成适合jinja2.env.filters的dict格式
+
+    如 env.filters.update(import_filter(filters))
+
+    参数：
+        module: 要导入的模块
+    """
+
+    my_filters = {
+        name: function
+        for name, function in inspect.getmembers(module)
+        if inspect.isfunction(function)
+    }
+
+    return my_filters
+
+
 class HtmlReport(object):
     def __init__(self, output_dir):
         """构造函数
@@ -586,19 +606,13 @@ class HtmlReport(object):
             logging.info(u'  Creating directory "{0}"...'.format(self.output_dir))
             mkpath(self.output_dir)
 
-        mylookup = TemplateLookup(
-            directories=[HTML_TEMPLATE_DIR],
-            input_encoding='utf-8',
-            output_encoding='utf-8',
-            encoding_errors='replace')
+        env = jinja2.Environment(loader=jinja2.FileSystemLoader([HTML_TEMPLATE_DIR], encoding='utf-8'))
+        env.filters.update(import_filters(filters))
 
-        mytemplate = mylookup.get_template(HTML_TEMPLATE_FILENAME)
+        mytemplate = env.get_template(HTML_TEMPLATE_FILENAME)
 
         with open(os.path.join(self.output_dir, HTML_REPORT_FILENAME), 'wb') as f:
-            try:
-                f.write(mytemplate.render(**result))
-            except:
-                print(mako.exceptions.text_error_template().render())
+            f.write(mytemplate.render(**result))
 
         logging.info(u'  Done')
 
@@ -611,18 +625,12 @@ class TextReport(object):
         :returns: 无
 
         """
-        mylookup = TemplateLookup(
-            directories=[TEXT_TEMPLATE_DIR],
-            input_encoding='utf-8',
-            encoding_errors='replace')
+        env = jinja2.Environment(loader=jinja2.FileSystemLoader([TEXT_TEMPLATE_DIR], encoding='utf-8'))
+        env.filters.update(import_filters(filters))
 
-        mytemplate = mylookup.get_template(TEXT_TEMPLATE_FILENAME)
+        mytemplate = env.get_template(TEXT_TEMPLATE_FILENAME)
 
-        try:
-            return mytemplate.render(**result)
-        except:
-            print(mako.exceptions.text_error_template().render())
-            return None
+        return mytemplate.render(**result)
 
 
 if __name__ == "__main__":
