@@ -42,32 +42,36 @@
             <th>日志结束时间</th>
             <td>{{summary['last_time']}}</td>
         </tr>
-        {% if version.details %}
+        {% if not version.details.empty %}
         <tr>
             <th>网关版本</th>
-            <td>{{version.details[0]['version']}}，svn revision：{{version.details[0]['revision']}}</td>
+            <td>{{version.details.iloc[0]['version']}}</td>
+        </tr>
+        <tr>
+            <th>SVN Revision</th>
+            <td>{{version.details.iloc[0]['revision']}}</td>
         </tr>
         <tr>
             <th>命令行</th>
-            <td>{{version.details[0]['cmdline']}}</td>
+            <td>{{version.details.iloc[0]['cmdline']}}</td>
         </tr>
         {% endif %}
     </table>
 
-    {% if os.details %}
+    {% if not os.details.empty %}
     <h2>系统信息</h2>
     <table>
         <tr>
             <th>操作系统</th>
-            <td>{{os.details[0]['type']}}，{{os.details[0]['version']}}</td>
+            <td>{{os.details.iloc[0]['type']}}，{{os.details.iloc[0]['version']}}</td>
         </tr>
         <tr>
             <th>CPU</th>
-            <td>{{os.details[0]['cpu']}}（{{os.details[0]['bits']}}）</td>
+            <td>{{os.details.iloc[0]['cpu']}}（{{os.details.iloc[0]['bits']}}）</td>
         </tr>
         <tr>
             <th>内存</th>
-            <td>{{os.details[0]['memory']}}</td>
+            <td>{{os.details.iloc[0]['memory']}}</td>
         </tr>
     </table>
     {% endif %}
@@ -77,7 +81,7 @@
     <table class='center'>
         <tr>
             <th rowspan="2">状态日志数</th>
-            <th colspan="5">耗时（毫秒）</th>
+            <th colspan="5">耗时（微秒）</th>
         </tr>
         <tr>
             <th>平均耗时</th>
@@ -88,13 +92,15 @@
         </tr>
         <tr>
             <td>{{status.summary['count'] | thousands_sep}}</td>
-            <td {{'class="warning"' if status.summary['mean'] >= 100000 else ''}}>{{(status.summary['mean']/1000) | thousands_sep(3)}}</td>
-            <td>{{(status.summary['std']/1000) | thousands_sep(3)}}</td>
-            <td>{{(status.summary['min']/1000) | thousands_sep(3)}}</td>
-            <td {{'class="warning"' if status.summary['max'] >= 500000 else ''}}>{{(status.summary['max']/1000) | thousands_sep(3)}}</td>
-            <td {{'class="warning"' if status.summary['p90'] >= 500000 else ''}}>{{(status.summary['p90']/1000) | thousands_sep(3)}}</td>
+            <td {{'class="warning"' if status.summary['mean'] >= 100000 else ''}}>{{status.summary['mean'] | thousands_sep(0)}}</td>
+            <td>{{status.summary['std'] | thousands_sep(0)}}</td>
+            <td>{{status.summary['min'] | thousands_sep(0)}}</td>
+            <td {{'class="warning"' if status.summary['max'] >= 500000 else ''}}>{{status.summary['max'] | thousands_sep(0)}}</td>
+            <td {{'class="warning"' if status.summary['p90'] >= 500000 else ''}}>{{status.summary['p90'] | thousands_sep(0)}}</td>
         </tr>
     </table>
+
+    <img src="{{images['status']}}">
 
     {% if startups|length %}
     <h2>网关启动时间</h2>

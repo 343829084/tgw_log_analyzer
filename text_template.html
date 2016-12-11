@@ -2,14 +2,15 @@ log file name:   {{summary['filename']}}
 line count:      {{summary['line_count']}}
 start time:      {{summary['first_time']}}
 end time:        {{summary['last_time']}}
-{%- if version.details%}
-gateway version: {{version.details[0]['version']}}, svn revision: {{version.details[0]['revision']}}
+{%- if not version.details.empty %}
+gateway version: {{version.details.iloc[0]['version']}}
+svn revision:    {{version.details.iloc[0]['revision']}}
 {% endif %}
 
-{%- if os.details%}
-OS:     {{os.details[0]['type']}}, {{os.details[0]['version']}}
-CPU:    {{os.details[0]['cpu']|trim}} ({{os.details[0]['bits']}})
-Memory: {{os.details[0]['memory']}}
+{%- if not os.details.empty %}
+OS:     {{os.details.iloc[0]['type']}}, {{os.details.iloc[0]['version']}}
+CPU:    {{os.details.iloc[0]['cpu']|trim}} ({{os.details.iloc[0]['bits']}})
+Memory: {{os.details.iloc[0]['memory']}}
 {%- endif%}
 
 Status logs:

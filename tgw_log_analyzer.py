@@ -12,6 +12,7 @@ import logging
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 import numpy as np
 import pandas as pd
 import re
@@ -22,6 +23,7 @@ import jinja2
 from distutils.dir_util import mkpath
 
 import filters
+import chart_util
 
 VERSION=u"20160802"
 
@@ -53,7 +55,7 @@ def summary(array):
         'max'   : array.max(),
         'min'   : array.min(),
         'mean'  : array.mean(),
-        'p90'   : array.quantile(0.9),
+        'p90'   : np.percentile(array, 90),
     }
 
 
@@ -83,43 +85,42 @@ class DateTime(object):
 
 
 class Result(object):
-    def __init__(self, summary, details, datetimes=None):
+    def __init__(self, summary, details):
         """初始化.
 
-        如果datetimes为None，则details中每项应该是dict，其details[i]['datetime']就是对应的时间。
+        details['datetime']就是对应的时间。
+
+        参数:
+            summary: 汇总dict
+            details: DataFrame，详细数据
         """
 
         self.summary = summary
-        if datetimes is None:
-            datetimes = (x['datetime'] for x in details)
+        self.details = pd.DataFrame(details)
 
-        if len(details) > 0:
-            # 把datetimes和details都按datetimes的顺序排序
-            self.datetimes, self.details = (list(x) for x in zip(*sorted(zip(datetimes, details), key=lambda pair: pair[0])))
-        else:
-            self.datetimes = list()
-            self.details   = list()
+        if 'datetime' in details:
+            self.details = self.details.sort('datetime')
 
     def summary(self):
         return self.summary
 
     def first(self):
-        return self.details[0]
+        return self.details.iloc[0]
 
     def last(self):
-        return self.details[len(self.details)]
+        return self.details.iloc[len(self.details)]
 
     def find_le(self, datetime):
-        i = bisect.bisect_right(self.datetimes, datetime)
+        i = self.details['datetime'].searchsorted(datetime, side='right')
         if i:
-            return self.details[i-1]
+            return self.details.iloc[i-1]
 
         raise exceptions.ValueError
 
     def find_ge(self, datetime):
-        i = bisect.bisect_left(self.datetimes, datetime)
+        i = self.details['datetime'].searchsorted(datetime, side='left')
         if i != len(self.details):
-            return self.details[i]
+            return self.details.iloc[i]
 
         raise exceptions.ValueError
 
@@ -173,9 +174,9 @@ class StatusParser(ParserBase):
     # LogCurrentStatus首行
     re_line_log_status_begin = re.compile(r'Current Statuses:')
 
-    def __init__(self):
+    def __init__(self, parser_name):
         """构造函数 """
-        super(StatusParser, self).__init__('status')
+        super(StatusParser, self).__init__(parser_name)
 
         self.status_begin_time = ''  # 状态开始时间。''表示不在状态块中
         self.last_status_time = ''
@@ -211,7 +212,7 @@ class StatusParser(ParserBase):
         duration = (df['end'] - df['begin']).dt.microseconds
         return Result(
             summary(duration),
-            self.statuses)
+            df)
 
     def __finish_last_status(self):
         """ 结束上一个状态块 """
@@ -453,7 +454,7 @@ class TgwLogParser(object):
             self.log_encodings = log_encoding
 
         self.parsers = (
-            StatusParser(),
+            StatusParser('status'),
             ConnectionParser('connections'),
             RegexParser(
                 'version',
@@ -593,6 +594,30 @@ class HtmlReport(object):
         """
         self.output_dir = output_dir
 
+    @staticmethod
+    def generate_images(result):
+        """生成需要的图形
+        """
+
+        images = dict()
+
+        # 生成状态处理所需的时间图
+        fig, ax = plt.subplots()
+        df = result['status'].details
+        ax.plot(
+            df['begin'],
+            (df['end'] - df['begin']) / pd.Timedelta('1us'),
+            marker='.', linestyle='')
+
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+        plt.xticks(rotation=15)
+        plt.minorticks_on()
+
+        images['status'] = chart_util.get_data_uri(fig)
+        plt.close(fig)
+
+        return images
+
     def generate(self, result):
         """生成报表
 
@@ -612,7 +637,10 @@ class HtmlReport(object):
         mytemplate = env.get_template(HTML_TEMPLATE_FILENAME)
 
         with open(os.path.join(self.output_dir, HTML_REPORT_FILENAME), 'wb') as f:
-            f.write(mytemplate.render(**result).encode('utf-8'))
+            f.write(
+                mytemplate.render(
+                    images=self.generate_images(result), **result).encode('utf-8')
+            )
 
         logging.info(u'  Done')
 
