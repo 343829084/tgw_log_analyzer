@@ -9,10 +9,7 @@ from collections import defaultdict
 import exceptions
 import locale
 import logging
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
+
 import numpy as np
 import pandas as pd
 import re
@@ -21,6 +18,12 @@ import sys
 import inspect
 import jinja2
 from distutils.dir_util import mkpath
+
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 import filters
 import chart_util
@@ -612,27 +615,38 @@ class HtmlReport(object):
         self.output_dir = output_dir
 
     @staticmethod
-    def generate_images(result):
-        """生成需要的图形
-        """
-
-        images = dict()
-
-        # 生成状态处理所需的时间图
+    def generate_time_chart(x, y):
+        # 生成处理需时的图
         fig, ax = plt.subplots()
-        df = result['status'].details
         ax.plot(
-            df['begin'],
-            (df['end'] - df['begin']) / pd.Timedelta('1us'),
-            marker='.', linestyle='')
+            x, y,
+            marker='.', markersize=3, linestyle='')
 
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
         ax.yaxis.set_major_formatter(matplotlib.ticker.StrMethodFormatter('{x:,.0f}'))
         plt.xticks(rotation=15)
         plt.minorticks_on()
 
-        images['status'] = chart_util.get_data_uri(fig)
+        divider = make_axes_locatable(ax)
+        ax_hist = divider.append_axes("right", 1.2, pad=0.1, sharey=ax)
+        plt.setp(ax_hist.get_yticklabels(), visible=False)
+        bins = sorted(set(ax.yaxis.get_majorticklocs()).union(ax.yaxis.get_minorticklocs()))
+        ax_hist.hist(y, bins=bins, orientation='horizontal')
+        plt.xticks(rotation=30)
+
+        result = chart_util.get_data_uri(fig)
         plt.close(fig)
+        return result
+
+    @staticmethod
+    def generate_images(result):
+        """生成需要的图形
+        """
+
+        images = dict()
+        images['status'] = HtmlReport.generate_time_chart(
+            result['status'].details['begin'],
+            (result['status'].details['end'] - result['status'].details['begin']) / pd.Timedelta('1us'))
 
         return images
 
