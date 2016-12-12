@@ -209,7 +209,7 @@ class StatusParser(ParserBase):
         self.__finish_last_status()
 
         df = pd.DataFrame.from_dict(self.statuses)
-        duration = (df['end'] - df['begin']).dt.microseconds
+        duration = (df['end'] - df['begin']) / pd.Timedelta('1us')
         return Result(
             summary(duration),
             df)
@@ -610,6 +610,7 @@ class HtmlReport(object):
             marker='.', linestyle='')
 
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+        ax.yaxis.set_major_formatter(matplotlib.ticker.StrMethodFormatter('{x:,.0f}'))
         plt.xticks(rotation=15)
         plt.minorticks_on()
 
