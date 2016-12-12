@@ -99,7 +99,7 @@ class Result(object):
         self.details = pd.DataFrame(details)
 
         if 'datetime' in details:
-            self.details = self.details.sort('datetime')
+            self.details = self.details.sort_values('datetime')
 
     def summary(self):
         return self.summary
@@ -661,6 +661,20 @@ class TextReport(object):
 
         return mytemplate.render(**result)
 
+def main(**args):
+    matplotlib.style.use('ggplot')
+
+    parser = TgwLogParser(args['logfile'][0], args['log_encoding'].split(','))
+
+    result = parser.parse()
+
+    if args['html_report']:
+        HtmlReport(args['output_dir']).generate(result)
+    else:
+        args['text_report'] = True
+
+    if args['text_report']:
+        print(TextReport().generate(result))
 
 if __name__ == "__main__":
     sys.stdout = codecs.getwriter(locale.getpreferredencoding())(sys.stdout)
@@ -701,16 +715,4 @@ TGW日志分析工具""")
     else:
         logging.basicConfig(level=logging.INFO, format=log_format)
 
-    matplotlib.style.use('ggplot')
-
-    parser = TgwLogParser(args.logfile[0], args.log_encoding.split(','))
-
-    result = parser.parse()
-
-    if args.html_report:
-        HtmlReport(args.output_dir).generate(result)
-    else:
-        args.text_report = True
-
-    if args.text_report:
-        print(TextReport().generate(result))
+    main(**vars(args))
