@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import pandas as pd
+
 def thousands_sep(num, digits=None):
     """为数字加上千位符，可选保留小数位数
 
@@ -26,6 +28,9 @@ def as_datetime(dt, default='--'):
         return str(dt)
     else:
         return default
+
+def timedelta(dt, unit='1s'):
+    return dt / pd.Timedelta(unit)
 
 def conn_status(status):
     if status == 'connected':
